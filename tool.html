@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DD Data Analysis Terminal — Single-file</title>
+
+  <!-- Libraries (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.0/build/global/luxon.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.25.2.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+  <style>
+    /* Terminal-style orange theme */
+    :root{
+      --bg:#070302;
+      --panel:#0e0b07;
+      --accent:#ffb347;
+      --accent-2:#ff9f1c;
+      --muted:#d6c7a1;
+      --card:#0b0906;
+      --glass: rgba(255,179,71,0.06);
+    }
+    html,body{height:100%}
+    body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial; margin:0; background:linear-gradient(180deg,#050200,#0b0705); color:var(--muted)}
+    header{padding:14px 18px; border-bottom:1px solid rgba(255,179,71,0.06); display:flex; gap:12px; align-items:center; background:linear-gradient(90deg, rgba(255,179,71,0.03), transparent)}
+    header h1{font-size:18px;margin:0;color:var(--accent); letter-spacing:1px}
+    header .subtitle{font-size:12px;color:rgba(255,179,71,0.6)}
+    .container{display:grid; grid-template-columns: 360px 1fr; gap:12px; padding:12px; align-items:start}
+    .panel{background:linear-gradient(180deg, rgba(255,179,71,0.02), rgba(0,0,0,0.15)); padding:12px; border-radius:10px; border:1px solid rgba(255,179,71,0.06); box-shadow: 0 6px 18px rgba(0,0,0,0.6)}
+    .left {height:calc(100vh - 110px); overflow:auto}
+    .right {height:calc(100vh - 110px); overflow:auto}
+    .control{margin-bottom:10px}
+    label{display:block;font-size:12px;color:var(--muted); margin-bottom:6px}
+    select,input,button,textarea{width:100%; padding:8px; border-radius:6px; border:1px solid rgba(255,179,71,0.06); background:transparent; color:var(--muted)}
+    button{cursor:pointer;background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#111; font-weight:700; border:none; padding:8px 10px}
+    .muted{font-size:12px;color:rgba(255,179,71,0.9)}
+    .small{font-size:12px}
+    table.dataTable{width:100% !important; color:var(--muted)}
+    .row{display:flex; gap:8px}
+    .row > *{flex:1}
+    .actions{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap}
+    .section-title{font-weight:700; color:var(--accent); margin:8px 0; letter-spacing:0.6px}
+    #plot{height:360px; background:linear-gradient(180deg, rgba(255,179,71,0.02), transparent); border-radius:6px; padding:6px}
+    footer{padding:12px;font-size:12px;color:var(--muted)}
+    pre#log{background:linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.3)); border-radius:6px; color:var(--muted); font-size:13px}
+    input[type=file]{padding:6px}
+    .btn-ghost{background:transparent; border:1px solid rgba(255,179,71,0.06); color:var(--muted); font-weight:600}
+    @media(max-width:900px){ .container{grid-template-columns:1fr; padding:8px} .left{order:2} .right{order:1} }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>[TGF Data Analysis Terminal]</h1>
+    <div style="display:flex; flex-direction:column">
+      <div class="subtitle">Resource Analytics Suite — local, offline</div>
+      <div class="muted" style="font-size:11px">Load CSV → Inspect → Detect → Flag → Export</div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- LEFT: Controls -->
+    <div class="panel left">
+      <div class="section-title">1) Load CSV</div>
+
+      <div class="control">
+        <label>Choose CSV file</label>
+        <input id="fileInput" type="file" accept=".csv, text/csv" />
+      </div>
+
+      <div class="control row">
+        <div>
+          <label>Delimiter</label>
+          <select id="delimiter">
+            <option value=",">Comma (,)</option>
+            <option value=";">Semicolon (;)</option>
+            <option value="\t">Tab</option>
+            <option value="|">Pipe (|)</option>
+          </select>
+        </div>
+        <div>
+          <label>Header row?</label>
+          <select id="hasHeader"><option value="true">Yes</option><option value="false">No</option></select>
+        </div>
+      </div>
+
+      <div class="control actions">
+        <button id="loadBtn">Load & Preview</button>
+        <button id="loadSample" class="btn-ghost">Load Sample Data</button>
+      </div>
+      <div class="muted small">Sample file contains common numeric, categorical, and date fields for quick demos.</div>
+
+      <hr style="opacity:0.05" />
+
+      <div class="section-title">2) Quick EDA</div>
+      <div class="control">
+        <button id="describeBtn">Descriptive Statistics & Missing</button>
+      </div>
+      <div class="control">
+        <label>Top N for categorical</label>
+        <input id="topN" type="number" value="5" />
+      </div>
+      <div class="control">
+        <button id="categoricalBtn">Show Categorical Summary</button>
+      </div>
+
+      <hr style="opacity:0.05" />
+      <div class="section-title">3) Anomaly Detection & Flagging</div>
+
+      <div class="control">
+        <label>Select numeric column</label>
+        <select id="numericCols"></select>
+      </div>
+
+      <div class="control row">
+        <div>
+          <label>Method</label>
+          <select id="anomalyMethod"><option value="iqr">IQR (default)</option><option value="zscore">Z-score</option></select>
+        </div>
+        <div>
+          <label>Threshold (z-score or IQR multiplier)</label>
+          <input id="threshold" type="number" value="1.5" step="0.1" />
+        </div>
+      </div>
+
+      <div class="control">
+        <label>Flag top N anomalies to reduce dataset to (for quick export)</label>
+        <input id="flagTopN" type="number" value="100" />
+      </div>
+
+      <div class="control actions">
+        <button id="detectBtn">Detect Anomalies (column)</button>
+        <button id="exportAnomsBtn">Export Flagged Anomalies</button>
+      </div>
+
+      <div style="margin-top:10px; border-top:1px dashed rgba(255,179,71,0.04); padding-top:10px">
+        <label class="muted small">One-click column-agnostic anomaly flagging</label>
+        <div class="row" style="margin-top:6px">
+          <input id="flagAcrossTopN" type="number" value="100" />
+          <select id="flagAcrossMethod"><option value="combined">Combined (IQR+Z)</option><option value="iqr">IQR-only</option><option value="zscore">Z-only</option></select>
+        </div>
+        <div class="actions" style="margin-top:8px">
+          <button id="flagTopAcrossBtn">Flag Top N Across All Numeric Columns</button>
+          <button id="exportAcrossBtn" class="btn-ghost">Export Flagged Across</button>
+        </div>
+      </div>
+
+      <hr style="opacity:0.05" />
+      <div class="section-title">4) Filtering</div>
+
+      <div class="control">
+        <label>Build condition</label>
+        <div style="display:flex; gap:6px">
+          <select id="filterCol"></select>
+          <select id="filterOp">
+            <option value="==">=</option><option value="!=">!=</option>
+            <option value=">">&gt;</option><option value="<">&lt;</option>
+            <option value=">=">&gt;=</option><option value="<=">&lt;=</option>
+            <option value="contains">contains</option>
+          </select>
+          <input id="filterVal" placeholder="value" />
+        </div>
+        <div style="display:flex; gap:6px; margin-top:6px">
+          <button id="addFilter">Add condition</button>
+          <button id="clearFilters">Clear</button>
+        </div>
+        <div id="filterList" class="muted small"></div>
+      </div>
+
+      <div class="control actions">
+        <button id="applyFilters">Apply Filters</button>
+        <button id="exportFiltered">Export Filtered</button>
+        <button id="resetFilterBtn">Reset to full dataset</button>
+      </div>
+
+      <hr style="opacity:0.05" />
+      <div class="section-title">5) Group & Aggregate</div>
+
+      <div class="control">
+        <label>Group by (choose up to 2)</label>
+        <div style="display:flex; gap:6px">
+          <select id="group1"></select>
+          <select id="group2"><option value="">(none)</option></select>
+        </div>
+      </div>
+
+      <div class="control row">
+        <div>
+          <label>Numeric column</label>
+          <select id="aggCol"></select>
+        </div>
+        <div>
+          <label>Aggregation</label>
+          <select id="aggFunc"><option>sum</option><option>mean</option><option>count</option><option>min</option><option>max</option></select>
+        </div>
+      </div>
+
+      <div class="control actions">
+        <button id="groupBtn">Run Group & Aggregate</button>
+        <button id="exportGroup">Export Aggregate</button>
+      </div>
+
+      <hr style="opacity:0.05" />
+      <div class="section-title">6) Date / Time Analysis</div>
+
+      <div class="control">
+        <label>Detected date columns</label>
+        <select id="dateCols"></select>
+      </div>
+      <div class="control row">
+        <div>
+          <label>Period</label>
+          <select id="timePeriod"><option value="month">Monthly</option><option value="week">Weekly</option></select>
+        </div>
+        <div>
+          <label>Metric (numeric)</label>
+          <select id="timeMetric"></select>
+        </div>
+      </div>
+      <div class="control actions">
+        <button id="timeSeriesBtn">Show Trend</button>
+        <button id="periodCompareBtn">Compare Two Periods</button>
+      </div>
+
+      <hr style="opacity:0.05" />
+      <div class="section-title">7) Visualization & Export</div>
+      <div class="control actions">
+        <button id="plotBar">Plot Bar</button>
+        <button id="plotHist">Histogram</button>
+        <button id="plotLine">Plot Line</button>
+        <button id="exportAll">Export Current View (CSV)</button>
+      </div>
+
+      <hr style="opacity:0.05" />
+      <div class="muted small">
+        Tip: Load CSV → Describe → Detect anomalies → Flag top 100 → Export.<br/>
+        Everything runs locally in your browser — nothing is uploaded.
+      </div>
+    </div>
+
+    <!-- RIGHT: Preview, Stats, Plots -->
+    <div class="panel right">
+      <div style="display:flex; gap:8px; align-items:center;">
+        <h3 style="margin:0; color:var(--accent)">Dataset Preview</h3>
+        <div class="muted" id="rowCount" style="margin-left:8px">No data loaded</div>
+      </div>
+
+      <div style="margin-top:8px;">
+        <table id="previewTable" class="display" style="width:100%"><thead></thead><tbody></tbody></table>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="section-title">Output / Messages</div>
+        <pre id="log" style="height:140px; overflow:auto; padding:8px; border-radius:6px; font-size:13px"></pre>
+      </div>
+
+      <div style="margin-top:12px">
+        <h4 class="section-title">Plot</h4>
+        <div id="plot"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <h4 class="section-title">Tables (Stats / Anomalies / Aggregates)</h4>
+        <div id="extraTables"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Built for Data Discovery (DD) clues. Save as a single file and open in your browser.
+  </footer>
+
+<script>
+(function(){
+  /***** State *****/
+  let rawData = [];
+  let columns = [];
+  let currentView = [];
+  let dataTypes = {};
+  let dtInstance = null;
+  let filters = [];
+
+  /***** Utilities *****/
+  const log = (s) => {
+    const el = document.getElementById('log');
+    el.textContent += '['+new Date().toLocaleTimeString()+'] ' + s + '\\n';
+    el.scrollTop = el.scrollHeight;
+    console.log(s);
+  };
+  const clearLog = () => { document.getElementById('log').textContent = ''; };
+
+  /***** Detect types heuristics *****/
+  function detectTypes(sampleRows=1000){
+    dataTypes = {};
+    const sample = rawData.slice(0, Math.min(sampleRows, rawData.length));
+    columns.forEach(c=>{
+      let nCount=0, dateCount=0, total=0;
+      for (let r of sample){
+        const v = r[c];
+        if (v === null || v === undefined || v==="") { total++; continue; }
+        total++;
+        const ns = Number(String(v).replace(/,/g,'')); if (!isNaN(ns) && isFinite(ns)) nCount++;
+        const d = Date.parse(String(v)); if (!isNaN(d)) dateCount++;
+      }
+      // heuristics thresholds tuned
+      if (total===0) dataTypes[c]='string';
+      else if (dateCount/total > 0.6) dataTypes[c]='date';
+      else if (nCount/total > 0.6) dataTypes[c]='number';
+      else dataTypes[c]='string';
+    });
+  }
+
+  /***** Table render *****/
+  function renderTable(rows){
+    const preview = $('#previewTable');
+    if (dtInstance){ dtInstance.destroy(); $('#previewTable thead').empty(); $('#previewTable tbody').empty(); }
+    if (!columns.length) return;
+    // header
+    let head = '<tr>' + columns.map(c=>`<th style="color:var(--muted)">${c}</th>`).join('') + '</tr>';
+    $('#previewTable thead').html(head);
+    // body (first 1000 rows)
+    const bodyRows = rows.slice(0, Math.min(rows.length, 1000)).map(r => {
+      return '<tr>' + columns.map(c=>`<td>${r[c] === undefined ? '' : String(r[c])}</td>`).join('') + '</tr>';
+    }).join('');
+    $('#previewTable tbody').html(bodyRows);
+    dtInstance = preview.DataTable({
+      pageLength: 10,
+      lengthMenu: [10,25,50,100],
+      retrieve: true
+    });
+    document.getElementById('rowCount').textContent = `${rows.length} rows • ${columns.length} cols`;
+  }
+
+  /***** CSV load *****/
+  document.getElementById('loadBtn').addEventListener('click', ()=>{
+    const f = document.getElementById('fileInput').files[0];
+    if (!f){ alert('Choose a CSV file first'); return; }
+    clearLog(); log('Parsing CSV: ' + f.name);
+    const delim = document.getElementById('delimiter').value;
+    const hasHeader = document.getElementById('hasHeader').value === 'true';
+
+    Papa.parse(f, {
+      header: hasHeader,
+      delimiter: delim === '\\t' ? '\\t' : delim,
+      skipEmptyLines: true,
+      dynamicTyping: false,
+      preview: 2000,
+      complete: function(results){
+        if (!hasHeader){
+          const firstRow = results.data[0];
+          columns = Object.keys(firstRow).map((k,i)=>'col'+(i+1));
+          Papa.parse(f, {
+            header: false, delimiter: delim === '\\t' ? '\\t' : delim,
+            skipEmptyLines: true,
+            dynamicTyping: false,
+            complete: function(res2){
+              rawData = res2.data.map(arr=>{
+                const obj = {};
+                for (let i=0;i<arr.length;i++) obj['col'+(i+1)] = arr[i];
+                return obj;
+              });
+              afterLoad();
+            }
+          });
+        } else {
+          columns = results.meta.fields;
+          Papa.parse(f, {
+            header: true, delimiter: delim === '\\t' ? '\\t' : delim,
+            skipEmptyLines: true,
+            dynamicTyping: false,
+            complete: function(res2){
+              rawData = res2.data;
+              afterLoad();
+            }
+          });
+        }
+      },
+      error: function(err){ log('Parse error: ' + err.message); }
+    });
+
+    function afterLoad(){
+      log('Loaded rows: ' + rawData.length);
+      rawData = rawData.map(r=>{
+        const obj = {};
+        columns.forEach(c=> obj[c] = r[c]===undefined ? '' : r[c]);
+        return obj;
+      });
+      detectTypes();
+      currentView = rawData.slice();
+      populateColumnSelects();
+      renderTable(currentView);
+      log('Types detected: ' + JSON.stringify(dataTypes));
+    }
+  });
+
+  /***** Sample data embedded and loader *****/
+  const sampleCSV = `id,name,category,amount,date,score
+1,Alice,alpha,120.5,2024-01-02,10
+2,Bob,beta,1300,2024-01-05,12
+3,Charlie,alpha,115,2024-02-01,9
+4,David,gamma,100000,2024-02-02,300
+5,Eva,beta,95,2024-03-01,11
+6,Frank,alpha,130,2024-03-02,13
+7,Grace,gamma,88,2024-03-05,7
+8,Helen,beta,105,2024-04-01,9
+9,Ivan,alpha,99,2024-04-02,8
+10,Jack,gamma,4200,2024-04-03,150
+11,Kate,alpha,128,2024-05-01,10
+12,Liam,beta,135,2024-05-05,11
+13,Mia,gamma,89,2024-06-01,9
+14,Nora,alpha,92,2024-06-02,8
+15,Oscar,beta,91000,2024-06-05,999
+16,Paul,gamma,100,2024-07-01,7
+17,Quinn,alpha,98,2024-07-02,6
+18,Rita,beta,101,2024-07-03,5
+19,Sam,gamma,102,2024-08-01,4
+20,Tina,alpha,150,2024-08-02,3
+`;
+  document.getElementById('loadSample').addEventListener('click', ()=>{
+    clearLog(); log('Loading embedded sample dataset...');
+    Papa.parse(sampleCSV, {header:true, dynamicTyping:false, skipEmptyLines:true, complete:function(res){
+      rawData = res.data; columns = res.meta.fields;
+      detectTypes(); currentView = rawData.slice(); populateColumnSelects(); renderTable(currentView);
+      log('Sample loaded. Rows: ' + rawData.length);
+    }});
+  });
+
+  /***** Populate selectors *****/
+  function populateColumnSelects(){
+    const fill = (id, includeEmpty=false) => {
+      const sel = document.getElementById(id);
+      sel.innerHTML = '';
+      if (includeEmpty) sel.innerHTML = '<option value="">(none)</option>';
+      columns.forEach(c=>{
+        const opt = document.createElement('option'); opt.value=c; opt.textContent=c;
+        sel.appendChild(opt);
+      });
+    };
+    fill('numericCols');
+    fill('filterCol');
+    fill('group1', true);
+    fill('group2', true);
+    fill('aggCol');
+    fill('timeMetric');
+    const dsel = document.getElementById('dateCols'); dsel.innerHTML = '<option value="">(none)</option>';
+    columns.filter(c=>dataTypes[c]==='date').forEach(c=> dsel.appendChild(new Option(c,c)));
+  }
+
+  /***** Descriptive stats *****/
+  document.getElementById('describeBtn').addEventListener('click', ()=>{
+    if (!rawData.length){ alert('Load data first'); return; }
+    clearLog(); log('Computing descriptive statistics...');
+    const numericCols = columns.filter(c=>dataTypes[c]==='number' || dataTypes[c]==='string' && rawData.some(r=>!isNaN(Number(String(r[c]).replace(/,/g,'')))));
+    const stats = {};
+    numericCols.forEach(c=>{
+      const vals = rawData.map(r=> {
+        const n = Number(String(r[c]).replace(/,/g,''));
+        return (!isNaN(n) && isFinite(n)) ? n : null;
+      }).filter(v=>v!==null);
+      if (!vals.length) return;
+      vals.sort((a,b)=>a-b);
+      const sum = vals.reduce((s,x)=>s+x,0);
+      const mean = sum/vals.length;
+      const median = vals.length%2 ? vals[(vals.length-1)/2] : (vals[vals.length/2-1]+vals[vals.length/2])/2;
+      const sq = vals.reduce((s,x)=>s+(x-mean)*(x-mean),0);
+      const sd = Math.sqrt(sq/ (vals.length-1 || 1));
+      const q1 = vals[Math.floor((vals.length-1)*0.25)];
+      const q3 = vals[Math.floor((vals.length-1)*0.75)];
+      stats[c] = {count:vals.length, mean, median, sd, min:vals[0], max:vals[vals.length-1], q1, q3};
+    });
+    const missing = {};
+    columns.forEach(c=>{
+      missing[c] = rawData.reduce((acc,r)=> acc + (r[c]===null || r[c]==='' || r[c]===undefined ? 1:0), 0);
+    });
+    const et = document.getElementById('extraTables');
+    et.innerHTML = '<h4>Descriptive Statistics</h4>';
+    const sRows = ['<table style="width:100%"><thead><tr><th>Column</th><th>count</th><th>mean</th><th>median</th><th>sd</th><th>min</th><th>q1</th><th>q3</th><th>max</th></tr></thead><tbody>'];
+    Object.keys(stats).forEach(c=>{
+      const st = stats[c];
+      sRows.push(`<tr><td>${c}</td><td>${st.count}</td><td>${st.mean.toFixed(3)}</td><td>${st.median}</td><td>${st.sd.toFixed(3)}</td><td>${st.min}</td><td>${st.q1}</td><td>${st.q3}</td><td>${st.max}</td></tr>`);
+    });
+    sRows.push('</tbody></table>');
+    sRows.push('<h4>Missing / Null counts</h4>');
+    sRows.push('<table style="width:100%"><thead><tr><th>Column</th><th>MissingCount</th></tr></thead><tbody>');
+    Object.keys(missing).forEach(c=> sRows.push(`<tr><td>${c}</td><td>${missing[c]}</td></tr>`));
+    sRows.push('</tbody></table>');
+    et.innerHTML = sRows.join('');
+    log('Descriptive stats rendered. Numeric columns: '+Object.keys(stats).join(', '));
+  });
+
+  /***** Categorical summary *****/
+  document.getElementById('categoricalBtn').addEventListener('click', ()=>{
+    if (!rawData.length){ alert('Load data first'); return; }
+    const topN = Number(document.getElementById('topN').value) || 5;
+    const catCols = columns.filter(c=>dataTypes[c]==='string' || dataTypes[c]==='date');
+    const sections = ['<div>'];
+    catCols.forEach(c=>{
+      const counts = {};
+      rawData.forEach(r=> {
+        const v = r[c]===undefined || r[c]===null || r[c]==='' ? '(empty)' : String(r[c]);
+        counts[v] = (counts[v]||0) + 1;
+      });
+      const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+      sections.push(`<strong>${c}</strong> (unique ${sorted.length})<br/>Top ${topN}:<ol>`);
+      sorted.slice(0, topN).forEach(([val,n])=> sections.push(`<li>${val} — ${n}</li>`));
+      sections.push('</ol>');
+    });
+    sections.push('</div>');
+    document.getElementById('extraTables').innerHTML = sections.join('');
+    log('Categorical summary computed for ' + catCols.length + ' columns.');
+  });
+
+  /***** Anomaly detection per column *****/
+  function computeIQR(values){
+    values = values.slice().sort((a,b)=>a-b);
+    const q1 = values[Math.floor((values.length-1)*0.25)];
+    const q3 = values[Math.floor((values.length-1)*0.75)];
+    return {q1,q3,iqr:q3-q1};
+  }
+  document.getElementById('detectBtn').addEventListener('click', ()=>{
+    if (!rawData.length){ alert('Load data first'); return; }
+    const col = document.getElementById('numericCols').value;
+    if (!col){ alert('Choose numeric column'); return; }
+    const method = document.getElementById('anomalyMethod').value;
+    const threshold = Number(document.getElementById('threshold').value) || 1.5;
+    const numericVals = rawData.map(r=>{
+      const n = Number(String(r[col]).replace(/,/g,''));
+      return (!isNaN(n) && isFinite(n)) ? n : null;
+    });
+    const cleanVals = numericVals.filter(v=>v!==null);
+    if (!cleanVals.length){ alert('No numeric values found in column.'); return; }
+    const flagged = [];
+    if (method==='iqr'){
+      const {q1,q3,iqr} = computeIQR(cleanVals);
+      const lower = q1 - threshold*iqr;
+      const upper = q3 + threshold*iqr;
+      rawData.forEach((r,i)=>{
+        const n = Number(String(r[col]).replace(/,/g,'')); if (isNaN(n)) return;
+        if (n < lower || n > upper) flagged.push({...r, __row_index:i, __value:n});
+      });
+      log(`IQR anomalies using ${threshold} -> lower ${lower}, upper ${upper}. Found ${flagged.length}`);
+    } else {
+      const mean = cleanVals.reduce((a,b)=>a+b,0)/cleanVals.length;
+      const sd = Math.sqrt(cleanVals.reduce((s,x)=>s+(x-mean)*(x-mean),0)/(cleanVals.length-1||1));
+      rawData.forEach((r,i)=>{
+        const n = Number(String(r[col]).replace(/,/g,'')); if (isNaN(n)) return;
+        const z = (n-mean)/(sd||1);
+        if (Math.abs(z) > threshold) flagged.push({...r, __row_index:i, __value:n, __z: z});
+      });
+      log(`Z-score anomalies with threshold ${threshold}. Found ${flagged.length}`);
+    }
+    let html = `<h4 style="color:var(--accent)">Anomalies for ${col} (method=${method}) — total ${flagged.length}</h4>`;
+    if (!flagged.length){ html += '<div class="muted">No anomalies found.</div>'; document.getElementById('extraTables').innerHTML = html; return; }
+    flagged.sort((a,b)=> Math.abs(b.__value) - Math.abs(a.__value));
+    html += '<table style="width:100%"><thead><tr><th>index</th><th>value</th>';
+    columns.slice(0,6).forEach(c=>html += `<th>${c}</th>`); html += '</tr></thead><tbody>';
+    flagged.slice(0, 200).forEach(r=> {
+      html += `<tr><td>${r.__row_index}</td><td>${r.__value}</td>`;
+      columns.slice(0,6).forEach(c=> html += `<td>${r[c] || ''}</td>`);
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    window._lastFlagged = flagged;
+    document.getElementById('extraTables').innerHTML = html;
+    currentView = rawData.slice();
+    log('Anomalies table rendered. Use Export Flagged Anomalies to download top N as CSV.');
+  });
+
+  document.getElementById('exportAnomsBtn').addEventListener('click', ()=>{
+    const flagged = window._lastFlagged || [];
+    if (!flagged.length){ alert('No flagged anomalies found. Run detection first.'); return; }
+    const topN = Number(document.getElementById('flagTopN').value) || 100;
+    const out = flagged.slice(0, topN).map(r=>{
+      const copy = {...r};
+      delete copy.__row_index; delete copy.__value; delete copy.__z;
+      return copy;
+    });
+    downloadJSONorCSV(out, 'flagged_anomalies_top'+topN+'.csv');
+  });
+
+  /***** One-click: Flag top N anomalies across all numeric columns *****/
+  document.getElementById('flagTopAcrossBtn').addEventListener('click', ()=>{
+    if (!rawData.length){ alert('Load data first'); return; }
+    const topN = Number(document.getElementById('flagAcrossTopN').value) || 100;
+    const method = document.getElementById('flagAcrossMethod').value; // combined/iqr/zscore
+    // Identify numeric columns
+    const numericCols = columns.filter(c => {
+      // pick columns where a majority of sample parse as numbers
+      const sample = rawData.slice(0, Math.min(500, rawData.length));
+      let ncount=0, total=0;
+      sample.forEach(r=>{ total++; const n = Number(String(r[c]).replace(/,/g,'')); if (!isNaN(n) && isFinite(n)) ncount++; });
+      return total>0 && (ncount/total) > 0.5;
+    });
+    if (!numericCols.length){ alert('No numeric columns detected to analyze'); return; }
+    log('Flagging across numeric columns: ' + numericCols.join(', '));
+    // For each numeric column compute standardized anomaly measure per row
+    // We'll compute two normalized scores:
+    // - Z-score absolute normalized by max z observed
+    // - IQR distance normalized by max distance observed
+    const scores = new Array(rawData.length).fill(0);
+    // Z-scores
+    if (method === 'zscore' || method === 'combined'){
+      numericCols.forEach(col=>{
+        const vals = rawData.map(r=> {
+          const n = Number(String(r[col]).replace(/,/g,'')); return (!isNaN(n) && isFinite(n)) ? n : null;
+        });
+        const clean = vals.filter(v=>v!==null);
+        if (!clean.length) return;
+        const mean = clean.reduce((a,b)=>a+b,0)/clean.length;
+        const sd = Math.sqrt(clean.reduce((s,x)=>s+(x-mean)*(x-mean),0)/(clean.length-1||1)) || 1;
+        // compute |z|
+        const absZ = vals.map(v=> v===null ? 0 : Math.abs((v-mean)/sd));
+        const maxZ = Math.max(...absZ);
+        for (let i=0;i<absZ.length;i++){
+          const norm = maxZ ? (absZ[i]/maxZ) : 0;
+          scores[i] = Math.max(scores[i], norm); // keep max deviation across columns
+        }
+      });
+    }
+    // IQR distances
+    if (method === 'iqr' || method === 'combined'){
+      numericCols.forEach(col=>{
+        const vals = rawData.map(r=> {
+          const n = Number(String(r[col]).replace(/,/g,'')); return (!isNaN(n) && isFinite(n)) ? n : null;
+        });
+        const clean = vals.filter(v=>v!==null);
+        if (!clean.length) return;
+        const {q1,q3,iqr} = computeIQR(clean);
+        const lower = q1 - 1.5*iqr; const upper = q3 + 1.5*iqr;
+        // distance outside IQR range normalized
+        const dist = vals.map(v => {
+          if (v===null) return 0;
+          if (v < lower) return (lower - v);
+          if (v > upper) return (v - upper);
+          return 0;
+        });
+        const maxD = Math.max(...dist);
+        for (let i=0;i<dist.length;i++){
+          const norm = maxD ? (dist[i]/maxD) : 0;
+          // If combined and already had a zscore, take max; keeps highest signal
+          scores[i] = Math.max(scores[i], norm);
+        }
+      });
+    }
+    // Build list of rows with scores and pick topN
+    const scoredRows = rawData.map((r,i)=> ({_i:i, _score: scores[i], ...r}));
+    scoredRows.sort((a,b)=> b._score - a._score);
+    const flagged = scoredRows.filter(r=> r._score > 0).slice(0, topN);
+    window._lastFlagged = flagged;
+    // Display
+    let html = `<h4 style="color:var(--accent)">Top ${flagged.length} flagged across all numeric columns</h4>`;
+    if (!flagged.length){ html += '<div class="muted">No anomalous rows detected by selected method.</div>'; document.getElementById('extraTables').innerHTML = html; return; }
+    html += '<table style="width:100%"><thead><tr><th>index</th><th>score</th>';
+    columns.slice(0,6).forEach(c=>html += `<th>${c}</th>`); html += '</tr></thead><tbody>';
+    flagged.forEach(r=> {
+      html += `<tr><td>${r._i}</td><td>${r._score.toFixed(3)}</td>`;
+      columns.slice(0,6).forEach(c=> html += `<td>${r[c] || ''}</td>`);
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('extraTables').innerHTML = html;
+    log('Flagging across numeric columns complete. Flagged: ' + flagged.length);
+  });
+
+  document.getElementById('exportAcrossBtn').addEventListener('click', ()=>{
+    const flagged = window._lastFlagged || [];
+    if (!flagged.length){ alert('No flagged across anomalies found. Run the one-click flag first.'); return; }
+    const topN = Number(document.getElementById('flagAcrossTopN').value) || 100;
+    const out = flagged.slice(0, topN).map(r=>{
+      const copy = {...r}; delete copy._i; delete copy._score; return copy;
+    });
+    downloadJSONorCSV(out, 'flagged_across_top'+topN+'.csv');
+  });
+
+  /***** Filtering builder *****/
+  document.getElementById('addFilter').addEventListener('click', ()=>{
+    const col = document.getElementById('filterCol').value;
+    const op = document.getElementById('filterOp').value;
+    const val = document.getElementById('filterVal').value;
+    if (!col){ alert('Select column'); return; }
+    if (val === ''){ alert('Enter a value'); return; }
+    filters.push({col,op,val});
+    renderFilters();
+  });
+  function renderFilters(){
+    const el = document.getElementById('filterList');
+    if (!filters.length){ el.innerHTML = '<span class="muted">No conditions</span>'; return; }
+    el.innerHTML = filters.map((f,i)=>`<div>${i+1}) ${f.col} ${f.op} "${f.val}" <button data-i="${i}" class="removeFilterBtn">x</button></div>`).join('');
+    document.querySelectorAll('.removeFilterBtn').forEach(btn=>{
+      btn.onclick = ()=>{ filters.splice(Number(btn.dataset.i),1); renderFilters(); };
+    });
+  }
+  document.getElementById('clearFilters').addEventListener('click', ()=>{ filters=[]; renderFilters(); });
+
+  function rowMatches(r, condition){
+    const rawVal = r[condition.col];
+    if (condition.op === 'contains') return String(rawVal).toLowerCase().includes(String(condition.val).toLowerCase());
+    const maybeNumL = Number(String(rawVal).replace(/,/g,''));
+    const maybeNumR = Number(String(condition.val).replace(/,/g,''));
+    if (!isNaN(maybeNumL) && !isNaN(maybeNumR)){
+      switch(condition.op){
+        case '==': return maybeNumL == maybeNumR;
+        case '!=': return maybeNumL != maybeNumR;
+        case '>': return maybeNumL > maybeNumR;
+        case '<': return maybeNumL < maybeNumR;
+        case '>=': return maybeNumL >= maybeNumR;
+        case '<=': return maybeNumL <= maybeNumR;
+      }
+    } else {
+      switch(condition.op){
+        case '==': return String(rawVal) === String(condition.val);
+        case '!=': return String(rawVal) !== String(condition.val);
+        case '>': return String(rawVal) > String(condition.val);
+        case '<': return String(rawVal) < String(condition.val);
+        case '>=': return String(rawVal) >= String(condition.val);
+        case '<=': return String(rawVal) <= String(condition.val);
+      }
+    }
+    return false;
+  }
+  document.getElementById('applyFilters').addEventListener('click', ()=>{
+    if (!rawData.length){ alert('Load data first'); return; }
+    if (!filters.length){ alert('No filters to apply'); return; }
+    currentView = rawData.filter(r => filters.every(cond => rowMatches(r, cond)));
+    renderTable(currentView);
+    log('Filters applied. Rows now: ' + currentView.length);
+  });
+  document.getElementById('resetFilterBtn').addEventListener('click', ()=>{
+    currentView = rawData.slice();
+    renderTable(currentView);
+    log('Reset to full dataset.');
+  });
+  document.getElementById('exportFiltered').addEventListener('click', ()=> {
+    if (!currentView.length){ alert('No data to export'); return; }
+    downloadJSONorCSV(currentView, 'filtered_data.csv');
+  });
+
+  /***** Group & aggregate *****/
+  document.getElementById('groupBtn').addEventListener('click', ()=>{
+    if (!rawData.length){ alert('Load data first'); return; }
+    const g1 = document.getElementById('group1').value;
+    const g2 = document.getElementById('group2').value;
+    const agg = document.getElementById('aggFunc').value;
+    const col = document.getElementById('aggCol').value;
+    if (!g1){ alert('Choose at least one group column'); return; }
+    const keyFn = (r) => g1 + ':' + (r[g1]||'') + (g2 ? '|' + g2 + ':' + (r[g2]||'') : '');
+    const groups = {};
+    currentView.forEach(r=>{
+      const key = keyFn(r);
+      if (!groups[key]) groups[key] = {count:0, rows:[], _key: key, _g1: r[g1], _g2: g2 ? r[g2] : null };
+      groups[key].count++;
+      groups[key].rows.push(r);
+    });
+    const out = [];
+    Object.values(groups).forEach(gr=>{
+      const vals = gr.rows.map(rr=>{
+        const n = Number(String(rr[col]).replace(/,/g,'')); return (!isNaN(n) && isFinite(n)) ? n : null;
+      }).filter(x=>x!==null);
+      let aggVal = null;
+      switch(agg){
+        case 'sum': aggVal = vals.reduce((a,b)=>a+b,0); break;
+        case 'mean': aggVal = vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length) : null; break;
+        case 'count': aggVal = gr.count; break;
+        case 'min': aggVal = vals.length ? Math.min(...vals) : null; break;
+        case 'max': aggVal = vals.length ? Math.max(...vals) : null; break;
+      }
+      out.push({group1:gr._g1, group2:gr._g2, agg: aggVal, count: gr.count});
+    });
+    let html = '<h4 style="color:var(--accent)">Group & Aggregate</h4><table style="width:100%"><thead><tr><th>' + g1 + '</th>';
+    if (g2) html += `<th>${g2}</th>`;
+    html += `<th>${agg}(${col})</th><th>count</th></tr></thead><tbody>`;
+    out.forEach(r=> html += `<tr><td>${r.group1}</td>${ g2 ? `<td>${r.group2}</td>` : '' }<td>${r.agg}</td><td>${r.count}</td></tr>`);
+    html += '</tbody></table>';
+    document.getElementById('extraTables').innerHTML = html;
+    window._lastAggregate = out;
+    log('Group & aggregate computed. Groups: ' + out.length);
+  });
+  document.getElementById('exportGroup').addEventListener('click', ()=>{
+    const out = window._lastAggregate || [];
+    if (!out.length){ alert('Run group & aggregate first'); return; }
+    downloadJSONorCSV(out, 'group_aggregate.csv');
+  });
+
+  /***** Date/time analysis *****/
+  function parseDate(v){
+    if (!v) return null;
+    try {
+      const s = String(v).trim();
+      let dt = luxon.DateTime.fromISO(s); if (dt.isValid) return dt;
+      dt = luxon.DateTime.fromFormat(s, 'M/d/yyyy'); if (dt.isValid) return dt;
+      dt = luxon.DateTime.fromRFC2822(s); if (dt.isValid) return dt;
+      dt = luxon.DateTime.fromSQL(s); if (dt.isValid) return dt;
+      dt = luxon.DateTime.fromFormat(s, 'yyyy-MM-dd'); if (dt.isValid) return dt;
+      const ms = Date.parse(s); if (!isNaN(ms)) return luxon.DateTime.fromMillis(ms);
+      return null;
+    } catch(e){ return null; }
+  }
+  document.getElementById('timeSeriesBtn').addEventListener('click', ()=>{
+    if (!rawData.length){ alert('Load data first'); return; }
+    const dateCol = document.getElementById('dateCols').value;
+    const metric = document.getElementById('timeMetric').value;
+    const period = document.getElementById('timePeriod').value;
+    if (!dateCol || !metric){ alert('Select date column and numeric metric'); return; }
+    const map = {};
+    currentView.forEach(r=>{
+      const dt = parseDate(r[dateCol]);
+      if (!dt) return;
+      const key = period==='month' ? `${dt.year}-${String(dt.month).padStart(2,'0')}` : `${dt.year}-W${String(dt.weekNumber).padStart(2,'0')}`;
+      const n = Number(String(r[metric]).replace(/,/g,'')); if (isNaN(n)) return;
+      if (!map[key]) map[key] = {sum:0, count:0};
+      map[key].sum += n; map[key].count +=1;
+    });
+    const arr = Object.keys(map).sort().map(k=> ({period:k, avg: map[k].sum/map[k].count, sum: map[k].sum, count: map[k].count}));
+    const x = arr.map(a=>a.period); const y = arr.map(a=>a.avg);
+    Plotly.newPlot('plot', [{x,y,mode:'lines+markers', name: metric}], {margin:{t:20}});
+    document.getElementById('extraTables').innerHTML = `<h4 style="color:var(--accent)">Time Series (${metric})</h4><pre>${JSON.stringify(arr.slice(0,50), null, 2)}</pre>`;
+    log('Time series computed and plotted with ' + arr.length + ' periods.');
+  });
+  document.getElementById('periodCompareBtn').addEventListener('click', ()=>{
+    if (!rawData.length){ alert('Load data first'); return; }
+    const dateCol = document.getElementById('dateCols').value;
+    const metric = document.getElementById('timeMetric').value;
+    if (!dateCol || !metric){ alert('Select date column and numeric metric'); return; }
+    const map = {};
+    currentView.forEach(r=>{
+      const dt = parseDate(r[dateCol]); if (!dt) return;
+      const key = `${dt.year}-${String(dt.month).padStart(2,'0')}`;
+      const n = Number(String(r[metric]).replace(/,/g,'')); if (isNaN(n)) return;
+      if (!map[key]) map[key] = 0; map[key] += n;
+    });
+    const keys = Object.keys(map).sort();
+    const last2 = keys.slice(-2);
+    const result = last2.map(k=> ({period:k, total: map[k]}));
+    document.getElementById('extraTables').innerHTML = `<h4 style="color:var(--accent)">Period Comparison</h4><pre>${JSON.stringify(result, null, 2)}</pre>`;
+    log('Period comparison: ' + JSON.stringify(result));
+  });
+
+  /***** Visualizations *****/
+  document.getElementById('plotBar').addEventListener('click', ()=>{
+    const col = prompt('Enter categorical column to count (exact name):');
+    if (!col) return;
+    const counts = {};
+    currentView.forEach(r=> { const v = r[col]===undefined||r[col]===''? '(empty)': String(r[col]); counts[v] = (counts[v]||0)+1; });
+    const items = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,50);
+    const x = items.map(i=>i[0]), y = items.map(i=>i[1]);
+    Plotly.newPlot('plot', [{x,y,type:'bar'}], {margin:{t:20}});
+    log('Bar chart plotted for ' + col);
+  });
+  document.getElementById('plotHist').addEventListener('click', ()=>{
+    const col = prompt('Enter numeric column for histogram (exact name):');
+    if (!col) return;
+    const vals = currentView.map(r=>Number(String(r[col]).replace(/,/g,''))).filter(v=>!isNaN(v));
+    Plotly.newPlot('plot', [{x:vals,type:'histogram'}], {margin:{t:20}});
+    log('Histogram plotted for ' + col);
+  });
+  document.getElementById('plotLine').addEventListener('click', ()=>{
+    const xcol = prompt('X (date or numeric) column:');
+    const ycol = prompt('Y numeric column:');
+    if (!xcol||!ycol) return;
+    const points = currentView.map(r=> {
+      const xraw = r[xcol]; const yraw = Number(String(r[ycol]).replace(/,/g,''));
+      let x = parseDate(xraw);
+      if (x) x = x.toISO();
+      return {x,y:yraw};
+    }).filter(p=>p.x && !isNaN(p.y));
+    points.sort((a,b)=> new Date(a.x)-new Date(b.x));
+    Plotly.newPlot('plot',[{x:points.map(p=>p.x), y: points.map(p=>p.y), mode:'lines+markers'}], {margin:{t:20}});
+    log('Line plotted for ' + ycol + ' vs ' + xcol);
+  });
+
+  /***** Export helper *****/
+  function downloadJSONorCSV(objArray, filename){
+    if (!objArray || !objArray.length){ alert('No data to export'); return; }
+    if (!filename) filename = 'export.csv';
+    const csv = Papa.unparse(objArray);
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 5000);
+    log('Export started: ' + filename + ' (rows: ' + objArray.length + ')');
+  }
+
+  document.getElementById('exportAll').addEventListener('click', ()=>{
+    if (!currentView.length){ alert('No data to export'); return; }
+    downloadJSONorCSV(currentView, 'current_view.csv');
+  });
+
+  /***** Numeric select refresh *****/
+  function refreshNumericSelects(){
+    const numeric = columns.filter(c=> dataTypes[c]==='number' || dataTypes[c]==='string' && rawData.some(r=>!isNaN(Number(String(r[c]).replace(/,/g,'')))));
+    const sel = document.getElementById('numericCols'); sel.innerHTML = '';
+    numeric.forEach(c=> sel.appendChild(new Option(c,c)));
+    document.getElementById('filterCol').innerHTML = ''; columns.forEach(c=>document.getElementById('filterCol').appendChild(new Option(c,c)));
+    ['group1','group2','aggCol','timeMetric'].forEach(id=>{
+      const el = document.getElementById(id); if (!el) return; el.innerHTML = '<option value="">(none)</option>';
+      columns.forEach(c=> el.appendChild(new Option(c,c)));
+    });
+  }
+  setInterval(()=>{ if(columns.length) refreshNumericSelects(); }, 800);
+
+  /***** Helpers used by multiple features *****/
+  function computeIQR(values){
+    values = values.slice().sort((a,b)=>a-b);
+    const q1 = values[Math.floor((values.length-1)*0.25)];
+    const q3 = values[Math.floor((values.length-1)*0.75)];
+    return {q1,q3,iqr:q3-q1};
+  }
+
+  /***** Init log *****/
+  log('Terminal ready. Load CSV or use sample dataset.');
+
+})();
+</script>
+</body>
+</html>
