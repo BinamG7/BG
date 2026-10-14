@@ -1,1 +1,399 @@
+html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two Names, One Life | Binam & Bhawesh</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f7f3ed;
+            --paper-color: #fffdf9;
+            --text-color: #2c2c2c;
+            --accent-color: #8b5a2b;
+            --border-color: #d1c7bd;
+            --shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --paper-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #d4a373;
+            --border-color: #333333;
+            --shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        body {
+            font-family: 'Lora', serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 20px;
+        }
+
+        .controls {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 10px;
+        }
+
+        .btn {
+            background: var(--paper-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Lora', serif;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .btn:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .book-container {
+            width: 100%;
+            max-width: 800px;
+            background-color: var(--paper-color);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            border-radius: 8px;
+            overflow: hidden;
+            min-height: 750px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .cover-page {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 60px 40px;
+            height: 750px;
+            background: linear-gradient(135deg, var(--paper-color) 0%, var(--bg-color) 100%);
+        }
+
+        .cover-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+
+        .cover-subtitle {
+            font-size: 1.2rem;
+            font-style: italic;
+            margin-bottom: 40px;
+            color: var(--text-color);
+            opacity: 0.8;
+        }
+
+        .cover-authors {
+            font-size: 1.1rem;
+            margin-bottom: 50px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .start-btn {
+            background-color: var(--accent-color);
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-family: 'Lora', serif;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .start-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .page {
+            display: none;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 60px 80px;
+            height: 750px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .page.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-header {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 25px;
+        }
+
+        .page-content {
+            font-size: 1.05rem;
+            line-height: 1.8;
+            overflow-y: auto;
+            flex-grow: 1;
+            padding-right: 10px;
+            text-align: justify;
+        }
+
+        .page-content p {
+            margin-bottom: 20px;
+            text-indent: 1.5em;
+        }
+
+        .page-content p:first-of-type {
+            text-indent: 0;
+        }
+
+        .page-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border-color);
+            padding-top: 15px;
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: var(--text-color);
+            opacity: 0.7;
+        }
+
+        .page-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .page-content::-webkit-scrollbar-thumb {
+            background-color: var(--border-color);
+            border-radius: 3px;
+        }
+
+        @media(max-width: 768px) {
+            .page { padding: 30px 20px; }
+            .cover-title { font-size: 2.2rem; }
+        }
+    </style>
+</head>
+<body data-theme="light">
+
+    <div class="controls">
+        <button class="btn" onclick="toggleTheme()">🌓 Theme</button>
+        <button class="btn" onclick="goToCover()">🏠 Cover</button>
+    </div>
+
+    <div class="book-container">
+        <!-- COVER PAGE -->
+        <div id="page-0" class="cover-page page active">
+            <div>
+                <h1 class="cover-title">Two Names, One Life</h1>
+                <p class="cover-subtitle">A Digital Journey Through Thought, Memory, and Existence</p>
+                <div class="cover-authors">Binam &amp; Bhawesh</div>
+            </div>
+            <button class="start-btn" onclick="nextPage()">Open Book</button>
+        </div>
+
+        <!-- TABLE OF CONTENTS -->
+        <div id="page-1" class="page">
+            <div class="page-header">Table of Contents</div>
+            <div class="page-content" style="display: flex; flex-direction: column; justify-content: center;">
+                <ul style="list-style: none; line-height: 2.2; font-size: 1.1rem;">
+                    <li><strong>Part I: Binam</strong> — The Tree, Mornings, and Clouds</li>
+                    <li><strong>Part II: Binam</strong> — Butterflies and Unexpected Wonder</li>
+                    <li><strong>Part III: Binam</strong> — Mother's Calls and Coffee Spills</li>
+                    <li><strong>Part IV: Binam</strong> — Found Coins and Coincidences</li>
+                    <li><strong>Part V: Binam</strong> — Convenience Store Noodles and Cinematic Days</li>
+                    <li><strong>Part VI: Bhawesh</strong> — Quiet Suspicions and the Weight of Happiness</li>
+                    <li><strong>Part VII: Bhawesh</strong> — Broken Pens and the Labyrinth of Anxiety</li>
+                    <li><strong>Part VIII: Bhawesh</strong> — Butterflies, Memory, and Missing Buttons</li>
+                </ul>
+            </div>
+            <div class="page-footer">
+                <span>Table of Contents</span>
+                <button class="btn" onclick="nextPage()">Next &rarr;</button>
+            </div>
+        </div>
+
+        <!-- PAGE 2: BINAM PART 1 -->
+        <div id="page-2" class="page">
+            <div class="page-header">Binam — Part I</div>
+            <div class="page-content">
+                <p>Binam! I nearly died when I was eight. Well. Not really. But that's how I remember it. I climbed a tree. The tree disagreed. Gravity got involved. The earth won. I survived. The tree survived. The only thing injured was my dignity. Which, thankfully, heals slower than bones.</p>
+                <p>I've been suspicious of life ever since. Not because it's dangerous. Because it's strange. Very strange. For example: have you ever noticed that nobody talks about how absurd mornings are?</p>
+                <p>Every day millions of people wake up and immediately continue being themselves. Imagine that. You open your eyes and somehow remember your name. Your memories. Your responsibilities. Your embarrassing moments from seven years ago. How? Nobody explains this. Everyone just accepts it. As if consciousness isn't the weirdest thing ever discovered.</p>
+                <p>I think about things like that. Probably more than I should. A lot more. Sometimes I'll be walking somewhere important and suddenly become distracted by a cloud. Not because it's a special cloud. Because it's a cloud. Floating. Existing. Traveling across the sky without paying rent. Honestly, clouds are living the dream. I envy them.</p>
+            </div>
+            <div class="page-footer">
+                <button class="btn" onclick="prevPage()">&larr; Prev</button>
+                <span>Page 2</span>
+                <button class="btn" onclick="nextPage()">Next &rarr;</button>
+            </div>
+        </div>
+
+        <!-- PAGE 3: BINAM PART 2 -->
+        <div id="page-3" class="page">
+            <div class="page-header">Binam — Part II</div>
+            <div class="page-content">
+                <p>I got distracted by a butterfly today. Which sounds ridiculous. Because it is ridiculous. I had places to be. Responsibilities. Important things. Adult things. Then a butterfly appeared and suddenly my entire schedule lost credibility.</p>
+                <p>In my defense, it was a very confident butterfly. The kind that flies around as if it personally owns the sky. I watched it for almost a minute. A full minute. Do you know how long a minute is when you're watching a butterfly? Apparently very long. Long enough for a stranger to walk past and probably wonder why I was staring at the air.</p>
+                <p>People always talk about finding purpose. Nobody talks about finding wonder. Purpose sounds exhausting. Wonder sounds fun. Imagine explaining that to someone. "What are your goals in life?" "Honestly? I don't know. But I saw a cat sitting on a motorcycle yesterday and I've been thinking about it ever since."</p>
+                <p>A fixed story sounds boring. I'd rather be a book that's still being written. Even if some chapters are confusing. Especially if some chapters are confusing. The best stories usually are.</p>
+            </div>
+            <div class="page-footer">
+                <button class="btn" onclick="prevPage()">&larr; Prev</button>
+                <span>Page 3</span>
+                <button class="btn" onclick="nextPage()">Next &rarr;</button>
+            </div>
+        </div>
+
+        <!-- PAGE 4: BINAM PART 3 -->
+        <div id="page-4" class="page">
+            <div class="page-header">Binam — Part III</div>
+            <div class="page-content">
+                <p>My mother called today. Actually, that's not the interesting part. My mother calls all the time. The interesting part is that the conversation lasted twenty-three minutes and somehow only four minutes were spent discussing the reason she called.</p>
+                <p>The remaining nineteen minutes were dedicated to topics such as: whether I was eating properly, whether I was sleeping properly, whether I was working too hard, whether I owned enough socks, and somehow, mysteriously, whether I remembered a neighbor from fifteen years ago.</p>
+                <p>Mothers have a remarkable ability to turn a simple phone call into an archaeological excavation. One question leads to another. Then another. Suddenly you're digging through memories you haven't seen in years.</p>
+                <p>I spilled the coffee. That's the story. The coffee survived. The table survived. My confidence suffered minor injuries. Still, while cleaning the mess, I remembered something my father once said. He said, "If you're going to make mistakes, at least make interesting ones."</p>
+            </div>
+            <div class="page-footer">
+                <button class="btn" onclick="prevPage()">&larr; Prev</button>
+                <span>Page 4</span>
+                <button class="btn" onclick="nextPage()">Next &rarr;</button>
+            </div>
+        </div>
+
+        <!-- PAGE 5: BHAWESH PART 1 -->
+        <div id="page-5" class="page">
+            <div class="page-header">Bhawesh — Part I</div>
+            <div class="page-content">
+                <p>I used to think there was something wrong with me. Not in a dramatic way. No tragic music. No lightning outside the window. Just a quiet suspicion. The kind that follows you home. The kind that sits beside you while everyone else seems busy living.</p>
+                <p>I remember being young and watching people laugh. Not fake laughter. Real laughter. The kind that arrives from somewhere deep inside. And I remember wondering how they did it. Not why. How. As if they knew something I didn't. As if everybody had received a handbook for existing and mine had somehow been lost in the mail.</p>
+                <p>Funny. Most people forget pain. I forget happiness. Pain always seemed more organized. Easier to locate. Easier to trust.</p>
+                <p>You know what's strange? People assume pessimists hate the world. I don't. I think I loved it too much. That's the problem. I expected meaning everywhere. In people. In promises. In love. In tomorrow.</p>
+            </div>
+            <div class="page-footer">
+                <button class="btn" onclick="prevPage()">&larr; Prev</button>
+                <span>Page 5</span>
+                <button class="btn" onclick="nextPage()">Next &rarr;</button>
+            </div>
+        </div>
+
+        <!-- PAGE 6: BHAWESH PART 2 -->
+        <div id="page-6" class="page">
+            <div class="page-header">Bhawesh — Part II</div>
+            <div class="page-content">
+                <p>The pen stopped working halfway through that last page. Which, if you think about it, is a very pen-like thing to do. You give something a single responsibility. Write. That's it. One job. One purpose.</p>
+                <p>I shook it. Nothing. I drew angry circles on the corner of the page. Nothing. Then, for reasons that probably concern several psychologists, I found myself staring at it. Actually staring. As if the pen owed me an explanation.</p>
+                <p>Humans are fascinating. Give us enough silence and we'll start holding grudges against inanimate objects. The pen eventually worked again. Of course it did. Which somehow annoyed me more.</p>
+                <p>Anxiety feels different from fear. Fear has an object. A reason. A destination. Anxiety feels different. It's like your mind received an emergency message but forgot to include the emergency.</p>
+            </div>
+            <div class="page-footer">
+                <button class="btn" onclick="prevPage()">&larr; Prev</button>
+                <span>Page 6</span>
+                <button class="btn" onclick="nextPage()">Next &rarr;</button>
+            </div>
+        </div>
+
+        <!-- PAGE 7: BHAWESH PART 3 -->
+        <div id="page-7" class="page">
+            <div class="page-header">Bhawesh — Part III</div>
+            <div class="page-content">
+                <p>I lost a button today. Not an important button. Apparently. At least that's what everyone would say. "It's just a button."</p>
+                <p>Human beings have a remarkable ability to reduce things until they become manageable. I admire that. I hate it. Mostly I hate it. Anyway. The button disappeared. One moment it existed. The next moment it had resigned from the shirt.</p>
+                <p>I spent ten minutes looking for it. Ten. Entire minutes of my life crawling around the floor searching for a piece of plastic worth less than a cup of coffee.</p>
+                <p>Then a thought occurred to me. One I immediately disliked. What if most of my worries are just buttons under chairs? What if I'm exhausting myself solving mysteries that aren't mysteries? Little pieces of evidence scattered through the day, suggesting that maybe the world is slightly less hostile than I've convinced myself it is.</p>
+            </div>
+            <div class="page-footer">
+                <button class="btn" onclick="prevPage()">&larr; Prev</button>
+                <span>Page 7</span>
+                <button class="btn" onclick="goToCover()">Finish</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        const totalPages = 7;
+
+        function showPage(index) {
+            const pages = document.querySelectorAll('.page');
+            pages.forEach((p, i) => {
+                p.classList.remove('active');
+                if (i === index) {
+                    p.classList.add('active');
+                }
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                showPage(currentPage);
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                showPage(currentPage);
+            }
+        }
+
+        function goToCover() {
+            currentPage = 0;
+            showPage(currentPage);
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            if (currentTheme === 'light') {
+                body.setAttribute('data-theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+            }
+        }
+    </script>
+</body>
+</html>
+"""
+
+# This automatically writes the file on your machine
+with open("index.html", "w", encoding="utf-8") as file:
+    file.write(html_content)
+
+print("Successfully generated index.html!")
 
